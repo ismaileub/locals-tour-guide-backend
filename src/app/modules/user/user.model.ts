@@ -26,6 +26,10 @@ const userSchema = new Schema<IUser>(
     pricePerHour: { type: Number },
     picture: { type: String },
     address: { type: String },
+    languages: {
+      type: [String],
+      default: [],
+    },
     isDeleted: { type: Boolean, default: false },
     isActive: {
       type: String,

@@ -6,9 +6,7 @@ import { BookingServices } from "./booking.service";
 
 const createBooking = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-
   const booking = await BookingServices.createBooking(req, user);
-
   sendResponse(res, {
     success: true,
     statusCode: 201,
@@ -17,24 +15,20 @@ const createBooking = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const completeBooking = catchAsync(async (req: Request, res: Response) => {
+const updateBooking = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-
-  const booking = await BookingServices.markBookingComplete(req, user);
-
+  const booking = await BookingServices.updateBookingStatus(req, user);
   sendResponse(res, {
     success: true,
     statusCode: 200,
-    message: "Booking marked as completed",
+    message: "Booking updated successfully",
     data: booking,
   });
 });
 
 const getBooking = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as JwtPayload;
-
   const booking = await BookingServices.getBookingById(req, user);
-
   sendResponse(res, {
     success: true,
     statusCode: 200,
@@ -44,15 +38,10 @@ const getBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload; // JwtPayload
-  const { page = 1, limit = 10 } = req.query;
-
-  const result = await BookingServices.getAllBookings(
-    req,
-    user,
-    Number(page),
-    Number(limit)
-  );
+  const user = req.user as JwtPayload;
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+  const result = await BookingServices.getAllBookings(req, user, page, limit);
 
   sendResponse(res, {
     success: true,
@@ -65,7 +54,7 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
 
 export const BookingControllers = {
   createBooking,
-  completeBooking,
+  updateBooking,
   getBooking,
   getAllBookings,
 };

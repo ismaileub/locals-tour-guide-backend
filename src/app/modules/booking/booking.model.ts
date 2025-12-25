@@ -1,36 +1,90 @@
 import { Schema, model, Types } from "mongoose";
+import { IBooking } from "./booking.interfaces";
 
-export interface IBooking {
-  _id?: Types.ObjectId;
-  tourId: Types.ObjectId;
-  guideId: Types.ObjectId;
-  touristId: Types.ObjectId;
+// Status log type
+export interface IBookingStatusLog {
   status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
-  paymentStatus: "UNPAID" | "PAID";
-  paymentId?: string;
-  createdAt: Date;
-  completedAt?: Date;
+  changedBy: Types.ObjectId;
+  role: "GUIDE" | "TOURIST" | "SYSTEM";
+  changedAt?: Date;
 }
 
 const bookingSchema = new Schema<IBooking>(
   {
-    tourId: { type: Schema.Types.ObjectId, ref: "Tour", required: true },
-    guideId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    bookingType: {
+      type: String,
+      enum: ["GUIDE_HIRE", "TOUR_PACKAGE"],
+      required: true,
+    },
+
+    tourId: {
+      type: Schema.Types.ObjectId,
+      ref: "Tour",
+      required: function () {
+        return this.bookingType === "TOUR_PACKAGE";
+      },
+    },
+
+    guideId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: function () {
+        return this.bookingType === "GUIDE_HIRE";
+      },
+    },
+
+    hourlyRate: {
+      type: Number,
+      required: function () {
+        return this.bookingType === "GUIDE_HIRE";
+      },
+    },
+
+    hours: {
+      type: Number,
+      required: function () {
+        return this.bookingType === "GUIDE_HIRE";
+      },
+    },
+
     touristId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    tourDate: { type: Date, required: true },
+    totalPrice: { type: Number, required: true },
+
     status: {
       type: String,
-      enum: ["PENDING", "COMPLETED", "CONFIRMED", "CANCELLED"],
+      enum: ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"],
       default: "PENDING",
     },
+
     paymentStatus: {
       type: String,
       enum: ["UNPAID", "PAID"],
       default: "UNPAID",
     },
+
     paymentId: { type: String },
-    completedAt: { type: Date },
+
+    //completedAt: { type: Date },
+
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          enum: ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"],
+          required: true,
+        },
+        changedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        role: {
+          type: String,
+          enum: ["GUIDE", "TOURIST"],
+          required: true,
+        },
+        changedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
-  { timestamps: { createdAt: true, updatedAt: true } }
+  { timestamps: true, versionKey: false }
 );
 
 export const Booking = model<IBooking>("Booking", bookingSchema);

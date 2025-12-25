@@ -53,10 +53,8 @@ const updateTour = async (req: Request, user: JwtPayload) => {
     spots: req.body.spots ? req.body.spots : undefined,
   };
 
-  // ❌ DO NOT allow changing coverPhoto
   delete payload.coverPhoto;
 
-  // Update tour (only fields that exist)
   const updatedTour = await Tour.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,

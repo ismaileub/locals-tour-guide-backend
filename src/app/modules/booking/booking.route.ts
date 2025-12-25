@@ -5,24 +5,23 @@ import { Role } from "../user/user.interface";
 
 const router = Router();
 
-// Tourist books a tour
+// Tourist creates a booking
 router.post("/", checkAuth(Role.TOURIST), BookingControllers.createBooking);
 
-// Update booking status
 router.patch(
   "/:id",
   checkAuth(Role.GUIDE, Role.TOURIST),
-  BookingControllers.completeBooking
+  BookingControllers.updateBooking
 );
 
-// Get booking (tourist or guide)
+// // Get single booking (tourist, guide, admin)
 router.get(
   "/:id",
-  checkAuth(Role.TOURIST, Role.GUIDE),
+  checkAuth(Role.ADMIN, Role.GUIDE, Role.TOURIST),
   BookingControllers.getBooking
 );
 
-// Get all bookings (with pagination)
+// // Get all bookings (paginated)
 router.get(
   "/",
   checkAuth(Role.ADMIN, Role.GUIDE, Role.TOURIST),

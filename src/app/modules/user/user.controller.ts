@@ -107,12 +107,29 @@ const getUserById = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getAllGuides = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { page = 1, limit = 10, language } = req.query;
+
+    const result = await UserServices.getAllGuides(Number(page), Number(limit));
+
+    sendResponse(res, {
+      success: true,
+      statusCode: httpStatus.OK,
+      message: "All Guides Retrieved Successfully",
+      data: result.data,
+      meta: result.meta,
+    });
+  }
+);
+
 export const UserControllers = {
   createUser,
   getAllUsers,
   updateUser,
   getMe,
   getUserById,
+  getAllGuides,
 };
 
 // route matching -> controller -> service -> model -> DB

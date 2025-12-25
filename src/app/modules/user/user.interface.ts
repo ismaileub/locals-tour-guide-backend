@@ -36,4 +36,5 @@ export interface IUser {
   isActive?: IsActive;
   role: Role;
   auths: IAuthProvider[];
+  languages?: string[];
 }

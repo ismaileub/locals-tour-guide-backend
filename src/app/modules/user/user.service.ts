@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import bcryptjs from "bcryptjs";
 import httpStatus from "http-status-codes";
@@ -148,7 +149,7 @@ const getMeInfo = async (email: string) => {
   return user;
 };
 
-export const getUserById = async (id: string) => {
+const getUserById = async (id: string) => {
   const user = await User.findById(id).select("-password");
 
   if (!user) {
@@ -158,10 +159,42 @@ export const getUserById = async (id: string) => {
   return user;
 };
 
+const getAllGuides = async (page = 1, limit = 10, language?: string) => {
+  const pageNumber = Number(page);
+  const limitNumber = Number(limit);
+
+  const skip = (pageNumber - 1) * limitNumber;
+  const filter: Record<string, any> = {
+    role: "GUIDE",
+  };
+
+  if (language) {
+    filter.languages = { $in: [language] };
+  }
+
+  const guides = await User.find(filter)
+    .select("-password")
+    .skip(skip)
+    .limit(limitNumber);
+
+  const totalGuides = await User.countDocuments({ role: "GUIDE" });
+
+  return {
+    data: guides,
+    meta: {
+      total: totalGuides,
+      page: pageNumber,
+      limit: limitNumber,
+      totalPages: Math.ceil(totalGuides / limitNumber),
+    },
+  };
+};
+
 export const UserServices = {
   createUser,
   getAllUsers,
   updateUser,
   getMeInfo,
   getUserById,
+  getAllGuides,
 };
