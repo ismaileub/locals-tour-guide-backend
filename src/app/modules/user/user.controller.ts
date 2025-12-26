@@ -109,9 +109,15 @@ const getUserById = catchAsync(async (req: Request, res: Response) => {
 
 const getAllGuides = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { page = 1, limit = 10, language } = req.query;
+    const { page = 1, limit = 6, language, sortBy, sortOrder } = req.query;
 
-    const result = await UserServices.getAllGuides(Number(page), Number(limit));
+    const result = await UserServices.getAllGuides(
+      Number(page),
+      Number(limit),
+      language as string | undefined,
+      sortBy as string | undefined,
+      (sortOrder as "asc" | "desc") || "asc"
+    );
 
     sendResponse(res, {
       success: true,

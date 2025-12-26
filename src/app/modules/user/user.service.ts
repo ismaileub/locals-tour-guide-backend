@@ -9,6 +9,8 @@ import { IAuthProvider, IUser, Role } from "./user.interface";
 import { User } from "./user.model";
 import { fileUploader } from "../../helpers/fileUploader";
 import { Request } from "express";
+import { Review } from "../review/review.model";
+import mongoose from "mongoose";
 
 const createUser = async (payload: Partial<IUser>) => {
   // Check if body is missing
@@ -71,6 +73,7 @@ const createUser = async (payload: Partial<IUser>) => {
 const updateUser = async (req: Request, user: JwtPayload) => {
   const userId = user.userId;
   const payload = { ...req.body };
+  console.log({ payload });
 
   const existingUser = await User.findById(userId);
 
@@ -100,6 +103,9 @@ const updateUser = async (req: Request, user: JwtPayload) => {
   if (req.file) {
     const uploadResult = await fileUploader.uploadToCloudinary(req.file);
     payload.picture = uploadResult?.secure_url;
+  }
+  if (payload.languages) {
+    payload.languages = payload.languages.map((l: string) => l.toLowerCase());
   }
 
   // Update user in DB
@@ -156,36 +162,170 @@ const getUserById = async (id: string) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
+  // If the user is a GUIDE, fetch reviews
+  if (user.role === "GUIDE") {
+    const reviews = await Review.aggregate([
+      {
+        $match: {
+          targetId: new mongoose.Types.ObjectId(id),
+          targetType: "GUIDE",
+        },
+      },
+      // Join reviewer info
+      {
+        $lookup: {
+          from: "users",
+          localField: "reviewerId",
+          foreignField: "_id",
+          as: "reviewer",
+        },
+      },
+      { $unwind: "$reviewer" },
+      {
+        $project: {
+          _id: 1,
+          rating: 1,
+          comment: 1,
+          createdAt: 1,
+          reviewer: {
+            _id: "$reviewer._id",
+            name: "$reviewer.name",
+            picture: "$reviewer.picture",
+          },
+        },
+      },
+      // Calculate average rating
+      {
+        $group: {
+          _id: "$targetId",
+          reviews: { $push: "$$ROOT" },
+          avgRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return {
+      ...user.toObject(),
+      reviews: reviews[0]?.reviews || [],
+      avgRating: reviews[0]?.avgRating || 0,
+      totalReviews: reviews[0]?.totalReviews || 0,
+    };
+  }
+
   return user;
 };
 
-const getAllGuides = async (page = 1, limit = 10, language?: string) => {
+// const getAllGuides = async (page = 1, limit = 10, language?: string) => {
+//   const pageNumber = Number(page);
+//   const limitNumber = Number(limit);
+
+//   const skip = (pageNumber - 1) * limitNumber;
+//   const filter: Record<string, any> = {
+//     role: "GUIDE",
+//   };
+
+//   if (language) {
+//     filter.languages = { $in: [language.toLowerCase()] };
+//   }
+
+//   const guides = await User.find(filter)
+//     .select("-password")
+//     .skip(skip)
+//     .limit(limitNumber);
+
+//   const totalGuides = await User.countDocuments({ role: "GUIDE" });
+
+//   return {
+//     data: guides,
+//     meta: {
+//       total: totalGuides,
+//       page: pageNumber,
+//       limit: limitNumber,
+//       totalPages: Math.ceil(totalGuides / limitNumber),
+//     },
+//   };
+// };
+
+const getAllGuides = async (
+  page = 1,
+  limit = 6,
+  language?: string,
+  sortBy?: string,
+  sortOrder: "asc" | "desc" = "desc"
+) => {
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
-
   const skip = (pageNumber - 1) * limitNumber;
-  const filter: Record<string, any> = {
+
+  const matchStage: any = {
     role: "GUIDE",
   };
 
   if (language) {
-    filter.languages = { $in: [language] };
+    matchStage.languages = { $in: [language.toLowerCase()] };
   }
 
-  const guides = await User.find(filter)
-    .select("-password")
-    .skip(skip)
-    .limit(limitNumber);
+  const aggregationPipeline: any[] = [
+    { $match: matchStage },
 
-  const totalGuides = await User.countDocuments({ role: "GUIDE" });
+    // Join reviews
+    {
+      $lookup: {
+        from: "reviews",
+        localField: "_id",
+        foreignField: "targetId",
+        as: "reviews",
+      },
+    },
+
+    // Calculate ratings
+    {
+      $addFields: {
+        totalReviews: { $size: "$reviews" },
+        avgRating: {
+          $cond: [
+            { $gt: [{ $size: "$reviews" }, 0] },
+            { $round: [{ $avg: "$reviews.rating" }, 1] },
+            0,
+          ],
+        },
+      },
+    },
+
+    // Return only what you need
+    {
+      $project: {
+        name: 1,
+        address: 1,
+        picture: 1,
+        pricePerHour: 1,
+        bio: 1,
+        avgRating: 1,
+        totalReviews: 1,
+      },
+    },
+  ];
+
+  // Only add $sort if sortBy is provided
+  if (sortBy) {
+    const order = sortOrder === "desc" ? -1 : 1;
+    aggregationPipeline.push({ $sort: { [sortBy]: order } });
+  }
+
+  aggregationPipeline.push({ $skip: skip }, { $limit: limitNumber });
+
+  const guides = await User.aggregate(aggregationPipeline);
+
+  const total = await User.countDocuments(matchStage);
 
   return {
     data: guides,
     meta: {
-      total: totalGuides,
+      total,
       page: pageNumber,
       limit: limitNumber,
-      totalPages: Math.ceil(totalGuides / limitNumber),
+      totalPages: Math.ceil(total / limitNumber),
     },
   };
 };

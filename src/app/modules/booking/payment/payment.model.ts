@@ -5,7 +5,6 @@ export interface IPayment extends Document {
   touristEmail: string;
   amount: number;
   method: string;
-  status: string;
   transactionId?: string;
   paymentDate: Date;
 }
@@ -15,7 +14,6 @@ const paymentSchema = new Schema<IPayment>({
   touristEmail: { type: String, required: true },
   amount: { type: Number, required: true },
   method: { type: String, required: true },
-  status: { type: String, default: "pending" },
   transactionId: { type: String },
   paymentDate: { type: Date, default: Date.now },
 });

@@ -16,11 +16,7 @@ router.get("/all-users", checkAuth(Role.ADMIN), UserControllers.getAllUsers);
 router.get("/me", checkAuth(...Object.values(Role)), UserControllers.getMe);
 router.get("/get-all-guide", UserControllers.getAllGuides);
 
-router.get(
-  "/:id",
-  checkAuth(...Object.values(Role)),
-  UserControllers.getUserById
-);
+router.get("/:id", UserControllers.getUserById);
 
 router.patch(
   "/:updateMe",

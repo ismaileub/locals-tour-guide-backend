@@ -5,6 +5,7 @@ import AppError from "../../errorHelpers/AppError";
 import { ITourInput } from "./tour.interface";
 import { Tour } from "./tour.model";
 import { fileUploader } from "../../helpers/fileUploader";
+import mongoose from "mongoose";
 
 const createTour = async (req: Request, user: JwtPayload) => {
   if (user.role !== "GUIDE") {
@@ -81,30 +82,131 @@ const deleteTour = async (req: Request, user: JwtPayload) => {
   return true;
 };
 
-const getTourById = async (req: Request) => {
-  const { id } = req.params;
+const getTourById = async (id: string) => {
+  const tour = await Tour.aggregate([
+    {
+      $match: { _id: new mongoose.Types.ObjectId(id) },
+    },
 
-  const tour = await Tour.findById(id).populate("guide", "name email");
+    // Join guide info
+    {
+      $lookup: {
+        from: "users",
+        localField: "guide",
+        foreignField: "_id",
+        as: "guide",
+      },
+    },
+    { $unwind: "$guide" },
 
-  if (!tour) {
+    // Join tour reviews
+    {
+      $lookup: {
+        from: "reviews",
+        let: { tourId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$targetId", "$$tourId"] },
+                  { $eq: ["$targetType", "TOUR"] },
+                ],
+              },
+            },
+          },
+
+          // Join reviewer info
+          {
+            $lookup: {
+              from: "users",
+              localField: "reviewerId",
+              foreignField: "_id",
+              as: "reviewer",
+            },
+          },
+          { $unwind: "$reviewer" },
+
+          {
+            $project: {
+              _id: 1,
+              rating: 1,
+              comment: 1,
+              createdAt: 1,
+              reviewer: {
+                _id: "$reviewer._id",
+                name: "$reviewer.name",
+                picture: "$reviewer.picture",
+              },
+            },
+          },
+        ],
+        as: "reviews",
+      },
+    },
+
+    // Calculate avg rating
+    {
+      $addFields: {
+        avgRating: {
+          $ifNull: [{ $avg: "$reviews.rating" }, 0],
+        },
+        totalReviews: { $size: "$reviews" },
+      },
+    },
+
+    // Clean guide data
+    {
+      $project: {
+        "guide.password": 0,
+        "guide.role": 0,
+      },
+    },
+  ]);
+
+  if (!tour.length) {
     throw new AppError(404, "Tour not found");
   }
 
-  return tour;
+  return tour[0];
 };
 
 const getAllTours = async (req: Request) => {
-  const { tourType } = req.query;
+  const {
+    tourType,
+    page = "1",
+    limit = "6",
+    sortBy = "price",
+    sortOrder = "asc",
+  } = req.query;
+
+  const pageNumber = Number(page);
+  const limitNumber = Number(limit);
+  const skip = (pageNumber - 1) * limitNumber;
 
   const filter: any = {};
+  if (tourType) filter.tourType = tourType;
 
-  if (tourType) {
-    filter.tourType = tourType;
-  }
+  // Determine sort order: 1 = ascending, -1 = descending
+  const sort: any = {};
+  sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
 
-  const tours = await Tour.find(filter).populate("guide", "name email picture");
+  const total = await Tour.countDocuments(filter);
 
-  return tours;
+  const tours = await Tour.find(filter)
+    .sort(sort)
+    .skip(skip)
+    .limit(limitNumber);
+
+  return {
+    data: tours,
+    meta: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      totalPages: Math.ceil(total / limitNumber),
+    },
+  };
 };
 
 const getMyTours = async (user: JwtPayload) => {

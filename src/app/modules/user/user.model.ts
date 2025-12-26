@@ -23,7 +23,9 @@ const userSchema = new Schema<IUser>(
       default: Role.TOURIST,
     },
     phone: { type: String },
-    pricePerHour: { type: Number },
+    bio: { type: String },
+    gender: { type: String },
+    pricePerHour: { type: Number, default: 0 },
     picture: { type: String },
     address: { type: String },
     languages: {

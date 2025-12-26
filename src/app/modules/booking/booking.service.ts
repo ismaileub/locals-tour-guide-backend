@@ -5,6 +5,7 @@ import AppError from "../../errorHelpers/AppError";
 import { Booking } from "./booking.model";
 import { Tour } from "../tour/tour.model";
 import { User } from "../user/user.model";
+import { StatusCodes } from "http-status-codes";
 
 // Create a booking (tour package or guide hire)
 const createBooking = async (req: Request, user: JwtPayload) => {
@@ -90,6 +91,38 @@ const getBookingById = async (req: Request, user: JwtPayload) => {
 
   return booking;
 };
+const getSingleBookingByTouristIdAndTargetId = async (
+  req: Request,
+  user: JwtPayload
+) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new AppError(StatusCodes.BAD_REQUEST, "Target ID is required");
+  }
+
+  // Try finding as GUIDE_HIRE first
+  let booking = await Booking.findOne({
+    touristId: user.userId,
+    guideId: id,
+    bookingType: "GUIDE_HIRE",
+  });
+
+  // If not found, try TOUR_PACKAGE
+  if (!booking) {
+    booking = await Booking.findOne({
+      touristId: user.userId,
+      tourId: id,
+      bookingType: "TOUR_PACKAGE",
+    });
+  }
+
+  if (!booking) {
+    throw new AppError(StatusCodes.NOT_FOUND, "Booking not found");
+  }
+
+  return booking;
+};
 
 // Get all bookings for current user with pagination
 const getAllBookings = async (
@@ -157,7 +190,7 @@ const updateBookingStatus = async (req: Request, user: JwtPayload) => {
       if (booking.status === "CONFIRMED" || booking.status === "COMPLETED") {
         throw new AppError(
           400,
-          "Cannot cancel after booking is confirmed or completed"
+          "Can not cancel after booking is confirmed or completed"
         );
       }
       booking.status = "CANCELLED";
@@ -169,7 +202,7 @@ const updateBookingStatus = async (req: Request, user: JwtPayload) => {
     } else if (status === "CONFIRMED") {
       throw new AppError(403, "Tourist cannot confirm booking");
     } else if (status === "COMPLETED") {
-      throw new AppError(403, "Tourist cannot mark booking complete");
+      throw new AppError(403, "Tourist can not mark booking complete");
     }
   }
 
@@ -193,7 +226,7 @@ const updateBookingStatus = async (req: Request, user: JwtPayload) => {
       if (booking.status === "CONFIRMED" || booking.status === "COMPLETED") {
         throw new AppError(
           400,
-          "Guide cannot cancel after confirmation or complete"
+          "Can not cancel after confirmation or complete"
         );
       }
       booking.status = "CANCELLED";
@@ -231,9 +264,225 @@ const updateBookingStatus = async (req: Request, user: JwtPayload) => {
   return booking;
 };
 
+// Get pending bookings for a specific guide
+const getPendingBookingsForGuide = async (req: Request, user: JwtPayload) => {
+  const page = Number(req.query.page || 1);
+  const limit = Number(req.query.limit || 10);
+  const skip = (page - 1) * limit;
+
+  const filter = {
+    $or: [
+      { bookingType: "GUIDE_HIRE", guideId: user.userId },
+      { bookingType: "TOUR_PACKAGE" },
+    ],
+    status: { $in: ["PENDING", "CANCELLED"] },
+  };
+
+  const total = await Booking.countDocuments(filter);
+
+  const bookings = await Booking.find(filter)
+    .populate("touristId", "name email phone picture")
+    .populate("guideId", "name email")
+    .populate({
+      path: "tourId",
+      match: { guide: user.userId },
+    })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  // filter out TOUR_PACKAGE bookings where tourId does not match guide
+  const finalBookings = bookings.filter(
+    (b) =>
+      b.bookingType === "GUIDE_HIRE" ||
+      (b.bookingType === "TOUR_PACKAGE" && b.tourId)
+  );
+
+  return {
+    data: finalBookings,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+// const getConfirmedAndCompleteBookingsForGuide = async (
+//   req: Request,
+//   user: JwtPayload
+// ) => {
+//   const page = Number(req.query.page || 1);
+//   const limit = Number(req.query.limit || 10);
+//   const skip = (page - 1) * limit;
+
+//   // Step 1: Get all GUIDE_HIRE bookings for this guide
+//   const guideHireFilter = {
+//     bookingType: "GUIDE_HIRE",
+//     guideId: user.userId,
+//     status: { $in: ["COMPLETED", "CONFIRMED"] },
+//   };
+
+//   // Step 2: Get TOUR_PACKAGE bookings where the guide matches
+//   const tourPackageFilter = {
+//     bookingType: "TOUR_PACKAGE",
+//     status: { $in: ["COMPLETED", "CONFIRMED"] },
+//   };
+
+//   // Count documents for pagination
+//   const totalGuideHire = await Booking.countDocuments(guideHireFilter);
+//   const totalTourPackage = await Booking.countDocuments({
+//     ...tourPackageFilter,
+//     tourId: { $exists: true }, // will filter later in code
+//   });
+
+//   const total = totalGuideHire + totalTourPackage;
+
+//   // Step 3: Fetch bookings with pagination
+//   const bookings = await Booking.find({
+//     $or: [guideHireFilter, tourPackageFilter],
+//   })
+//     .populate("touristId", "name email phone picture")
+//     .populate("guideId", "name email")
+//     .populate({
+//       path: "tourId",
+//       match: { guide: user.userId }, // only guide's tours
+//     })
+//     .sort({ createdAt: -1 })
+//     .skip(skip)
+//     .limit(limit);
+
+//   // Step 4: Filter out TOUR_PACKAGE that are not for this guide
+//   const finalBookings = bookings.filter(
+//     (b) =>
+//       b.bookingType === "GUIDE_HIRE" ||
+//       (b.bookingType === "TOUR_PACKAGE" && b.tourId)
+//   );
+
+//   return {
+//     data: finalBookings,
+//     meta: {
+//       page,
+//       limit,
+//       total,
+//       totalPages: Math.ceil(total / limit),
+//     },
+//   };
+// };
+const getConfirmedAndCompleteBookingsForGuide = async (
+  req: Request,
+  user: JwtPayload
+) => {
+  const page = Number(req.query.page || 1);
+  const limit = Number(req.query.limit || 10);
+  const skip = (page - 1) * limit;
+
+  const guideHireFilter = {
+    bookingType: "GUIDE_HIRE",
+    guideId: user.userId,
+    status: { $in: ["COMPLETED", "CONFIRMED"] },
+  };
+
+  const tourPackageFilter = {
+    bookingType: "TOUR_PACKAGE",
+    status: { $in: ["COMPLETED", "CONFIRMED"] },
+  };
+
+  const totalGuideHire = await Booking.countDocuments(guideHireFilter);
+  const totalTourPackage = await Booking.countDocuments({
+    ...tourPackageFilter,
+    tourId: { $exists: true },
+  });
+
+  const total = totalGuideHire + totalTourPackage;
+
+  // Fetch bookings
+  const bookings = await Booking.find({
+    $or: [guideHireFilter, tourPackageFilter],
+  })
+    .populate("touristId", "name email phone picture")
+    .populate("guideId", "name email")
+    .populate({
+      path: "tourId",
+      match: { guide: user.userId },
+    })
+    .sort({
+      // Custom sorting: CONFIRMED first, COMPLETED later, then newest first
+      status: 1, // We'll handle it manually after fetching
+      createdAt: -1,
+    })
+    .skip(skip)
+    .limit(limit);
+
+  // Filter TOUR_PACKAGE not for this guide
+  const finalBookings = bookings.filter(
+    (b) =>
+      b.bookingType === "GUIDE_HIRE" ||
+      (b.bookingType === "TOUR_PACKAGE" && b.tourId)
+  );
+
+  // Sort manually by status: CONFIRMED first, COMPLETED last
+  finalBookings.sort((a, b) => {
+    const order: Record<string, number> = { CONFIRMED: 0, COMPLETED: 1 };
+    const aOrder = order[a.status] ?? 2; // unknown statuses get lowest priority
+    const bOrder = order[b.status] ?? 2;
+    return aOrder - bOrder;
+  });
+
+  return {
+    data: finalBookings,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+// booking.service.ts
+
+const getBookingsNeedPayment = async (userId: string) => {
+  const bookings = await Booking.find({
+    touristId: userId,
+    status: "COMPLETED",
+    paymentStatus: { $ne: "PAID" },
+  });
+
+  return bookings;
+};
+
+const getPaidBookings = async (req: Request, user: JwtPayload) => {
+  const filter: any = {
+    paymentStatus: "PAID",
+  };
+
+  // Guide → bookings related to guide
+  if (user.role === "GUIDE") {
+    filter.guideId = user.userId;
+  }
+
+  // Tourist → own bookings
+  if (user.role === "TOURIST") {
+    filter.touristId = user.userId;
+  }
+
+  const bookings = await Booking.find(filter);
+  // .populate("tourId")
+  // .populate("guideId")
+  // .sort({ createdAt: -1 });
+
+  return bookings;
+};
+
 export const BookingServices = {
   createBooking,
   updateBookingStatus,
   getBookingById,
   getAllBookings,
+  getPendingBookingsForGuide,
+  getConfirmedAndCompleteBookingsForGuide,
+  getSingleBookingByTouristIdAndTargetId,
+  getBookingsNeedPayment,
+  getPaidBookings,
 };

@@ -52,9 +52,92 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getPendingBookingsForGuide = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+
+    const result = await BookingServices.getPendingBookingsForGuide(req, user);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Pending bookings retrieved successfully",
+      data: result.data,
+      meta: result.meta,
+    });
+  }
+);
+
+const getConfirmedAndCompleteBookingsForGuide = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+
+    const result =
+      await BookingServices.getConfirmedAndCompleteBookingsForGuide(req, user);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Confirmed and Completed bookings retrieved successfully",
+      data: result.data,
+      meta: result.meta,
+    });
+  }
+);
+
+const getSingleBookingByTouristIdAndTargetId = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+
+    const booking =
+      await BookingServices.getSingleBookingByTouristIdAndTargetId(req, user);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Booking retrieved successfully",
+      data: booking,
+    });
+  }
+);
+
+// booking.controller.ts
+const getBookingsNeedPayment = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+
+    const bookings = await BookingServices.getBookingsNeedPayment(user.userId);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Bookings that need payment retrieved successfully",
+      data: bookings,
+    });
+  }
+);
+
+const getPaidBookings = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as JwtPayload;
+
+  const result = await BookingServices.getPaidBookings(req, user);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Paid bookings retrieved successfully",
+    data: result,
+  });
+});
+
 export const BookingControllers = {
   createBooking,
   updateBooking,
   getBooking,
   getAllBookings,
+  getPendingBookingsForGuide,
+  getConfirmedAndCompleteBookingsForGuide,
+  getSingleBookingByTouristIdAndTargetId,
+  getBookingsNeedPayment,
+  getPaidBookings,
 };

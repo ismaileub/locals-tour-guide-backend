@@ -31,6 +31,8 @@ export interface IUser {
   phone?: string;
   pricePerHour?: number;
   picture?: string;
+  bio?: string;
+  gender?: string;
   address?: string;
   isDeleted?: string;
   isActive?: IsActive;

@@ -44,7 +44,7 @@ const deleteTour = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getTourById = catchAsync(async (req: Request, res: Response) => {
-  const tour = await TourServices.getTourById(req);
+  const tour = await TourServices.getTourById(req.params.id);
 
   sendResponse(res, {
     success: true,
@@ -61,7 +61,8 @@ const getAllTours = catchAsync(async (req: Request, res: Response) => {
     success: true,
     statusCode: 200,
     message: "Tours fetched successfully",
-    data: tours,
+    data: tours.data,
+    meta: tours.meta,
   });
 });
 

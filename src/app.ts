@@ -12,6 +12,7 @@ import { UserRoutes } from "./app/modules/user/user.route";
 import { TourRoutes } from "./app/modules/tour/tour.route";
 import { BookingRoutes } from "./app/modules/booking/booking.route";
 import { PaymentRoutes } from "./app/modules/booking/payment/payment.routes";
+import { ReviewRoutes } from "./app/modules/review/review.route";
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use("/api/auth", AuthRoutes);
 app.use("/api/users", UserRoutes);
 app.use("/api/tours", TourRoutes);
 app.use("/api/booking", BookingRoutes);
+app.use("/api/review", ReviewRoutes);
 app.use("/api/payment", PaymentRoutes);
 
 app.get("/", (req: Request, res: Response) => {
