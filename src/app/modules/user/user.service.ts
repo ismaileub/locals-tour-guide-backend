@@ -11,6 +11,8 @@ import { fileUploader } from "../../helpers/fileUploader";
 import { Request } from "express";
 import { Review } from "../review/review.model";
 import mongoose from "mongoose";
+import { Tour } from "../tour/tour.model";
+import { Booking } from "../booking/booking.model";
 
 const createUser = async (payload: Partial<IUser>) => {
   // Check if body is missing
@@ -117,7 +119,7 @@ const updateUser = async (req: Request, user: JwtPayload) => {
   return updatedUser;
 };
 
-const getAllUsers = async (page = 1, limit = 10) => {
+const getAllUsers = async (page = 1, limit = 8) => {
   const pageNumber = Number(page);
   const limitNumber = Number(limit);
 
@@ -330,6 +332,33 @@ const getAllGuides = async (
   };
 };
 
+const deleteUser = async (userId: string) => {
+  const user = await User.findById(userId);
+  if (!user) throw new AppError(404, "User not found");
+
+  user.isDeleted = true;
+  await user.save();
+
+  // if (user.role === "GUIDE") {
+  //   // Soft delete tours
+  //   await Tour.updateMany({ guide: user._id }, { $set: { isDeleted: true } });
+
+  //   // Cancel all bookings associated with this guide
+  //   await Booking.updateMany(
+  //     { guide: user._id },
+  //     { $set: { status: "CANCELED" } }
+  //   );
+  // } else if (user.role === "TOURIST") {
+  //   // Cancel all bookings made by tourist
+  //   await Booking.updateMany(
+  //     { tourist: user._id },
+  //     { $set: { status: "CANCELED" } }
+  //   );
+  // }
+
+  return user;
+};
+
 export const UserServices = {
   createUser,
   getAllUsers,
@@ -337,4 +366,5 @@ export const UserServices = {
   getMeInfo,
   getUserById,
   getAllGuides,
+  deleteUser,
 };

@@ -6,6 +6,7 @@ import { Booking } from "./booking.model";
 import { Tour } from "../tour/tour.model";
 import { User } from "../user/user.model";
 import { StatusCodes } from "http-status-codes";
+import { PipelineStage } from "mongoose";
 
 // Create a booking (tour package or guide hire)
 const createBooking = async (req: Request, user: JwtPayload) => {
@@ -125,41 +126,161 @@ const getSingleBookingByTouristIdAndTargetId = async (
 };
 
 // Get all bookings for current user with pagination
-const getAllBookings = async (
-  req: Request,
-  user: JwtPayload,
-  page = 1,
-  limit = 10
-) => {
+// const getAllBookings = async (
+//   req: Request,
+//   user: JwtPayload,
+//   page = 1,
+//   limit = 10
+// ) => {
+//   const skip = (page - 1) * limit;
+
+//   let filter: any = {};
+//   if (user.role === "TOURIST") filter = { touristId: user.userId };
+//   else if (user.role === "GUIDE") {
+//     filter = {
+//       $or: [{ guideId: user.userId }, { "tourId.guideId": user.userId }],
+//     };
+//   } else if (user.role === "ADMIN") filter = {};
+//   else throw new AppError(403, "Unauthorized");
+
+//   const bookings = await Booking.find(filter)
+//     .populate("tourId")
+//     .populate("guideId", "name email")
+//     .populate("touristId", "name email")
+//     .skip(skip)
+//     .limit(limit)
+//     .sort({ createdAt: -1 });
+
+//   const totalBookings = await Booking.countDocuments(filter);
+
+//   return {
+//     data: bookings,
+//     meta: {
+//       total: totalBookings,
+//       page,
+//       limit,
+//       totalPages: Math.ceil(totalBookings / limit),
+//     },
+//   };
+// };
+
+//get all booking do admin
+const getAllBookings = async (page: number, limit: number) => {
   const skip = (page - 1) * limit;
 
-  let filter: any = {};
-  if (user.role === "TOURIST") filter = { touristId: user.userId };
-  else if (user.role === "GUIDE") {
-    filter = {
-      $or: [{ guideId: user.userId }, { "tourId.guideId": user.userId }],
-    };
-  } else if (user.role === "ADMIN") filter = {};
-  else throw new AppError(403, "Unauthorized");
+  const pipeline: PipelineStage[] = [
+    // 🔹 Tourist
+    {
+      $lookup: {
+        from: "users",
+        localField: "touristId",
+        foreignField: "_id",
+        as: "tourist",
+      },
+    },
+    { $unwind: "$tourist" },
 
-  const bookings = await Booking.find(filter)
-    .populate("tourId")
-    .populate("guideId", "name email")
-    .populate("touristId", "name email")
-    .skip(skip)
-    .limit(limit)
-    .sort({ createdAt: -1 });
+    // 🔹 Tour (for TOUR_PACKAGE)
+    {
+      $lookup: {
+        from: "tours",
+        localField: "tourId",
+        foreignField: "_id",
+        as: "tour",
+      },
+    },
+    { $unwind: { path: "$tour", preserveNullAndEmptyArrays: true } },
 
-  const totalBookings = await Booking.countDocuments(filter);
+    // 🔹 Guide from GUIDE_HIRE
+    {
+      $lookup: {
+        from: "users",
+        localField: "guideId",
+        foreignField: "_id",
+        as: "hireGuide",
+      },
+    },
+    { $unwind: { path: "$hireGuide", preserveNullAndEmptyArrays: true } },
+
+    // 🔹 Guide from TOUR_PACKAGE (tour.guide)
+    {
+      $lookup: {
+        from: "users",
+        localField: "tour.guide",
+        foreignField: "_id",
+        as: "tourGuide",
+      },
+    },
+    { $unwind: { path: "$tourGuide", preserveNullAndEmptyArrays: true } },
+
+    { $sort: { createdAt: -1 } },
+
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: limit },
+
+          {
+            $project: {
+              bookingType: 1,
+              tourDate: 1,
+              totalPrice: 1,
+              status: 1,
+              paymentStatus: 1,
+              createdAt: 1,
+
+              tourist: {
+                name: "$tourist.name",
+                email: "$tourist.email",
+                phone: "$tourist.phone",
+              },
+
+              // 👇 Dynamic guide based on booking type
+              guide: {
+                $cond: [
+                  { $eq: ["$bookingType", "GUIDE_HIRE"] },
+                  {
+                    name: "$hireGuide.name",
+                    email: "$hireGuide.email",
+                    phone: "$hireGuide.phone",
+                  },
+                  {
+                    name: "$tourGuide.name",
+                    email: "$tourGuide.email",
+                    phone: "$tourGuide.phone",
+                  },
+                ],
+              },
+
+              tour: {
+                $cond: [
+                  { $eq: ["$bookingType", "TOUR_PACKAGE"] },
+                  { title: "$tour.title" },
+                  "$$REMOVE",
+                ],
+              },
+            },
+          },
+        ],
+
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ];
+
+  const result = await Booking.aggregate(pipeline);
+
+  const total = result[0]?.totalCount[0]?.count || 0;
 
   return {
-    data: bookings,
     meta: {
-      total: totalBookings,
       page,
       limit,
-      totalPages: Math.ceil(totalBookings / limit),
+      total,
+      totalPage: Math.ceil(total / limit),
     },
+    data: result[0]?.data || [],
   };
 };
 
@@ -451,28 +572,84 @@ const getBookingsNeedPayment = async (userId: string) => {
 
   return bookings;
 };
+const getAllUnpaidBookingsOfGuide = async (user: JwtPayload) => {
+  // Step 1: fetch all unpaid completed bookings
+  const bookings = await Booking.find({
+    paymentStatus: { $ne: "PAID" },
+    status: "COMPLETED",
+  })
+    .populate({
+      path: "tourId",
+      select: "title guide",
+    })
+    .populate({
+      path: "touristId",
+      select: "name email",
+    })
+    .populate({
+      path: "guideId",
+      select: "name email picture",
+    });
+
+  // Step 2: role-based filtering
+  let filteredBookings = bookings;
+
+  if (user.role === "GUIDE") {
+    filteredBookings = bookings.filter((booking) => {
+      if (booking.bookingType === "GUIDE_HIRE") {
+        return booking.guideId?._id.toString() === user.userId;
+      } else if (booking.bookingType === "TOUR_PACKAGE") {
+        return booking.tourId?.guide.toString() === user.userId;
+      }
+      return false;
+    });
+  }
+
+  if (user.role === "TOURIST") {
+    filteredBookings = bookings.filter(
+      (booking) => booking.touristId.toString() === user.userId
+    );
+  }
+
+  return filteredBookings;
+};
 
 const getPaidBookings = async (req: Request, user: JwtPayload) => {
-  const filter: any = {
+  // Step 1: fetch all paid completed bookings
+  const bookings = await Booking.find({
     paymentStatus: "PAID",
-  };
+    status: "COMPLETED",
+  })
+    .populate("tourId")
+    .populate("touristId")
+    .populate("guideId");
 
-  // Guide → bookings related to guide
+  // Step 2: role-based filtering
+  let filteredBookings = bookings;
+
   if (user.role === "GUIDE") {
-    filter.guideId = user.userId;
+    filteredBookings = bookings.filter((booking) => {
+      if (booking.bookingType === "GUIDE_HIRE") {
+        return booking.guideId?._id.toString() === user.userId;
+      } else if (booking.bookingType === "TOUR_PACKAGE") {
+        return booking.tourId?.guide.toString() === user.userId;
+      }
+      return false;
+    });
   }
 
-  // Tourist → own bookings
   if (user.role === "TOURIST") {
-    filter.touristId = user.userId;
+    filteredBookings = bookings.filter(
+      (booking) => booking.touristId.toString() === user.userId
+    );
   }
 
-  const bookings = await Booking.find(filter);
-  // .populate("tourId")
-  // .populate("guideId")
-  // .sort({ createdAt: -1 });
+  // Step 3: no paid booking found
+  if (filteredBookings.length === 0) {
+    throw new AppError(httpStatus.NOT_FOUND, "No paid bookings found");
+  }
 
-  return bookings;
+  return filteredBookings;
 };
 
 export const BookingServices = {
@@ -485,4 +662,5 @@ export const BookingServices = {
   getSingleBookingByTouristIdAndTargetId,
   getBookingsNeedPayment,
   getPaidBookings,
+  getAllUnpaidBookingsOfGuide,
 };

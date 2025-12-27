@@ -34,7 +34,7 @@ export interface IUser {
   bio?: string;
   gender?: string;
   address?: string;
-  isDeleted?: string;
+  isDeleted?: boolean;
   isActive?: IsActive;
   role: Role;
   auths: IAuthProvider[];

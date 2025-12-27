@@ -34,11 +34,16 @@ router.get(
   checkAuth(Role.TOURIST),
   BookingControllers.getBookingsNeedPayment
 );
-
 router.get(
   "/paid-booking",
-  checkAuth(Role.GUIDE, Role.TOURIST),
+  checkAuth(Role.TOURIST, Role.GUIDE),
   BookingControllers.getPaidBookings
+);
+
+router.get(
+  "/unpaid-booking",
+  checkAuth(Role.GUIDE, Role.TOURIST),
+  BookingControllers.getAllUnpaidBookingsOfGuide
 );
 
 router.get(

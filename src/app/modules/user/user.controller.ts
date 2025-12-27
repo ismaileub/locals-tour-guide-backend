@@ -65,7 +65,7 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
 const getAllUsers = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     // Get page and limit from query params, with defaults
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 8 } = req.query;
 
     // Pass them to the service (convert to number)
     const result = await UserServices.getAllUsers(Number(page), Number(limit));
@@ -129,6 +129,18 @@ const getAllGuides = catchAsync(
   }
 );
 
+const deleteUser = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.params.id;
+  const deletedUser = await UserServices.deleteUser(userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "User deleted successfully",
+    data: deletedUser,
+  });
+});
+
 export const UserControllers = {
   createUser,
   getAllUsers,
@@ -136,6 +148,5 @@ export const UserControllers = {
   getMe,
   getUserById,
   getAllGuides,
+  deleteUser,
 };
-
-// route matching -> controller -> service -> model -> DB

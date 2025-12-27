@@ -37,11 +37,26 @@ const getBooking = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// const getAllBookings = catchAsync(async (req: Request, res: Response) => {
+//   const user = req.user as JwtPayload;
+//   const page = Number(req.query.page) || 1;
+//   const limit = Number(req.query.limit) || 10;
+//   const result = await BookingServices.getAllBookings(req, user, page, limit);
+
+//   sendResponse(res, {
+//     success: true,
+//     statusCode: 200,
+//     message: "Bookings retrieved successfully",
+//     data: result.data,
+//     meta: result.meta,
+//   });
+// });
+
+//get all booking fo admin
 const getAllBookings = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload;
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
-  const result = await BookingServices.getAllBookings(req, user, page, limit);
+  const result = await BookingServices.getAllBookings(page, limit);
 
   sendResponse(res, {
     success: true,
@@ -101,7 +116,6 @@ const getSingleBookingByTouristIdAndTargetId = catchAsync(
   }
 );
 
-// booking.controller.ts
 const getBookingsNeedPayment = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user as JwtPayload;
@@ -112,6 +126,21 @@ const getBookingsNeedPayment = catchAsync(
       success: true,
       statusCode: 200,
       message: "Bookings that need payment retrieved successfully",
+      data: bookings,
+    });
+  }
+);
+
+const getAllUnpaidBookingsOfGuide = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+
+    const bookings = await BookingServices.getAllUnpaidBookingsOfGuide(user);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Unpaid bookings retrieved successfully",
       data: bookings,
     });
   }
@@ -140,4 +169,5 @@ export const BookingControllers = {
   getSingleBookingByTouristIdAndTargetId,
   getBookingsNeedPayment,
   getPaidBookings,
+  getAllUnpaidBookingsOfGuide,
 };
