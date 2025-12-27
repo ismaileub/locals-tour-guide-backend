@@ -12,40 +12,22 @@ import { setAuthCookie } from "../../utils/setCookie";
 import { createUserTokens } from "../../utils/userTokens";
 import { AuthServices } from "./auth.service";
 
-const credentialsLogin = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    // const loginInfo = await AuthServices.credentialsLogin(req.body)
+const credentialsLogin = catchAsync(async (req: Request, res: Response) => {
+  const { user, tokens } = await AuthServices.credentialsLogin(req.body);
 
-    passport.authenticate("local", async (err: any, user: any, info: any) => {
-      if (err) {
-        console.log(err);
-        return next(new AppError(402, err));
-      }
+  setAuthCookie(res, tokens);
 
-      if (!user) {
-        // console.log("from !user");
-        // return new AppError(401, info.message)
-        return next(new AppError(401, info.message));
-      }
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "User Logged In Successfully",
+    data: {
+      ...user,
+      accessToken: tokens.accessToken,
+    },
+  });
+});
 
-      const userTokens = await createUserTokens(user);
-
-      // delete user.toObject().password
-
-      const { password: pass, ...rest } = user.toObject();
-
-      setAuthCookie(res, userTokens);
-
-      sendResponse(res, {
-        success: true,
-        statusCode: httpStatus.OK,
-        message: "User Logged In Successfully",
-
-        data: { ...rest, accessToken: userTokens.accessToken },
-      });
-    })(req, res, next);
-  }
-);
 const getNewAccessToken = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const refreshToken = req.cookies.refreshToken;

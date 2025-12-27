@@ -1,44 +1,101 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from "express";
 import { PaymentService } from "./payment.service";
+import { sendResponse } from "../../../utils/sendResponse";
+import httpStatus from "http-status-codes";
+import { catchAsync } from "../../../utils/catchAsync";
+import { Booking } from "../booking.model";
 
-const createPaymentIntent = async (req: Request, res: Response) => {
-  try {
-    const { amount } = req.body;
-    const paymentIntent = await PaymentService.createPaymentIntent(amount);
-    //
-    //
-    res.json({ clientSecret: paymentIntent.client_secret });
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+/**
+ * Create Stripe Payment Intent (Individual booking payment)
+ */
+const createPaymentIntent = catchAsync(async (req: Request, res: Response) => {
+  const { bookingId } = req.body;
+
+  if (!bookingId) {
+    throw new Error("Booking ID is required");
   }
-};
 
-const savePayment = async (req: Request, res: Response) => {
-  try {
-    const { bookingId, touristEmail, amount, method, transactionId } = req.body;
-    const payment = await PaymentService.savePayment({
-      bookingId,
-      touristEmail,
-      amount,
-      method,
-      transactionId,
-    });
-    res.status(201).json(payment);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+  const booking = await PaymentService.getBookingById(bookingId);
+
+  if (!booking) {
+    throw new Error("Booking not found");
   }
-};
 
-const getPaymentByBookingId = async (req: Request, res: Response) => {
-  try {
+  if (booking.paymentStatus === "PAID") {
+    throw new Error("Booking already paid");
+  }
+
+  if (booking.status !== "COMPLETED") {
+    throw new Error("Booking not confirmed");
+  }
+
+  const paymentIntent = await PaymentService.createPaymentIntent(
+    booking.totalPrice
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Payment intent created",
+    data: {
+      clientSecret: paymentIntent.client_secret,
+    },
+  });
+});
+
+/**
+ * Save payment info after successful Stripe payment
+ */
+const savePayment = catchAsync(async (req: Request, res: Response) => {
+  const { bookingId, transactionId } = req.body;
+  const booking = (await Booking.findById(bookingId).populate(
+    "touristId",
+    "name email phone"
+  )) as unknown as {
+    touristId: { name: string; email: string; phone: string };
+    totalPrice: number;
+    _id: string;
+  };
+  //console.log(req.body);
+
+  if (!bookingId || !transactionId || !booking) {
+    throw new Error("Invalid payment data");
+  }
+
+  const payment = await PaymentService.savePayment({
+    bookingId,
+    touristEmail: booking.touristId.email,
+    amount: booking.totalPrice,
+    method: "card",
+    transactionId,
+  });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.CREATED,
+    message: "Payment saved successfully",
+    data: payment,
+  });
+});
+
+/**
+ * Get payment info by booking ID
+ */
+const getPaymentByBookingId = catchAsync(
+  async (req: Request, res: Response) => {
     const { bookingId } = req.params;
+
     const payment = await PaymentService.getPaymentByBookingId(bookingId);
-    res.json(payment);
-  } catch (error: any) {
-    res.status(404).json({ error: error.message });
+
+    sendResponse(res, {
+      success: true,
+      statusCode: httpStatus.OK,
+      message: "Payment retrieved successfully",
+      data: payment,
+    });
   }
-};
+);
 
 export const PaymentController = {
   createPaymentIntent,

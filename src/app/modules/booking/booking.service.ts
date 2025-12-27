@@ -71,27 +71,29 @@ const createBooking = async (req: Request, user: JwtPayload) => {
 // Get single booking by id
 const getBookingById = async (req: Request, user: JwtPayload) => {
   const { id } = req.params;
-  const booking = await Booking.findById(id)
-    .populate("tourId")
-    .populate("guideId", "name email")
-    .populate("touristId", "name email");
 
-  if (!booking) throw new AppError(404, "Booking not found");
+  const booking = await Booking.findById(id).populate(
+    "touristId",
+    "name email phone"
+  );
 
-  // Only involved users or admin can access
+  if (!booking) {
+    throw new AppError(404, "Booking not found");
+  }
+
+  // 🔐 Authorization
   if (
-    (user.role === "TOURIST" && booking.touristId.toString() !== user.userId) ||
-    (user.role === "GUIDE" &&
-      booking.bookingType === "GUIDE_HIRE" &&
-      booking.guideId?.toString() !== user.userId) ||
-    (user.role === "GUIDE" && booking.bookingType === "TOUR_PACKAGE") ||
-    (user.role !== "ADMIN" && user.role !== "TOURIST" && user.role !== "GUIDE")
+    booking.touristId._id.toString() !== user.userId
+    // &&
+    // booking.guideId?._id?.toString() !== user.userId &&
+    // user.role !== "ADMIN"
   ) {
-    throw new AppError(403, "Unauthorized");
+    throw new AppError(403, "You are not allowed to view this booking");
   }
 
   return booking;
 };
+
 const getSingleBookingByTouristIdAndTargetId = async (
   req: Request,
   user: JwtPayload
@@ -107,7 +109,7 @@ const getSingleBookingByTouristIdAndTargetId = async (
     touristId: user.userId,
     guideId: id,
     bookingType: "GUIDE_HIRE",
-  });
+  }).populate("touristId", "name email phone");
 
   // If not found, try TOUR_PACKAGE
   if (!booking) {
@@ -115,7 +117,7 @@ const getSingleBookingByTouristIdAndTargetId = async (
       touristId: user.userId,
       tourId: id,
       bookingType: "TOUR_PACKAGE",
-    });
+    }).populate("touristId", "name email phone");
   }
 
   if (!booking) {
@@ -126,45 +128,51 @@ const getSingleBookingByTouristIdAndTargetId = async (
 };
 
 // Get all bookings for current user with pagination
-// const getAllBookings = async (
-//   req: Request,
-//   user: JwtPayload,
-//   page = 1,
-//   limit = 10
-// ) => {
-//   const skip = (page - 1) * limit;
+const getAllBookingsOfLoggedInUser = async (
+  user: JwtPayload,
+  page = 1,
+  limit = 8
+) => {
+  const skip = (page - 1) * limit;
 
-//   let filter: any = {};
-//   if (user.role === "TOURIST") filter = { touristId: user.userId };
-//   else if (user.role === "GUIDE") {
-//     filter = {
-//       $or: [{ guideId: user.userId }, { "tourId.guideId": user.userId }],
-//     };
-//   } else if (user.role === "ADMIN") filter = {};
-//   else throw new AppError(403, "Unauthorized");
+  let filter: any = {};
+  if (user.role === "TOURIST") filter = { touristId: user.userId };
+  else if (user.role === "GUIDE") {
+    filter = {
+      $or: [{ guideId: user.userId }, { "tourId.guideId": user.userId }],
+    };
+  } else if (user.role === "ADMIN") filter = {};
+  else throw new AppError(403, "Unauthorized");
 
-//   const bookings = await Booking.find(filter)
-//     .populate("tourId")
-//     .populate("guideId", "name email")
-//     .populate("touristId", "name email")
-//     .skip(skip)
-//     .limit(limit)
-//     .sort({ createdAt: -1 });
+  const bookings = await Booking.find(filter)
+    .populate({
+      path: "tourId",
+      select: "title duration location guide",
+      populate: {
+        path: "guide",
+        select: "name email phone",
+      },
+    })
+    .populate("guideId", "name email phone")
+    .populate("touristId", "name email phone")
+    .skip(skip)
+    .limit(limit)
+    .sort({ createdAt: -1 });
 
-//   const totalBookings = await Booking.countDocuments(filter);
+  const totalBookings = await Booking.countDocuments(filter);
 
-//   return {
-//     data: bookings,
-//     meta: {
-//       total: totalBookings,
-//       page,
-//       limit,
-//       totalPages: Math.ceil(totalBookings / limit),
-//     },
-//   };
-// };
+  return {
+    data: bookings,
+    meta: {
+      total: totalBookings,
+      page,
+      limit,
+      totalPages: Math.ceil(totalBookings / limit),
+    },
+  };
+};
 
-//get all booking do admin
+//get all booking for admin
 const getAllBookings = async (page: number, limit: number) => {
   const skip = (page - 1) * limit;
 
@@ -561,8 +569,6 @@ const getConfirmedAndCompleteBookingsForGuide = async (
   };
 };
 
-// booking.service.ts
-
 const getBookingsNeedPayment = async (userId: string) => {
   const bookings = await Booking.find({
     touristId: userId,
@@ -599,7 +605,7 @@ const getAllUnpaidBookingsOfGuide = async (user: JwtPayload) => {
       if (booking.bookingType === "GUIDE_HIRE") {
         return booking.guideId?._id.toString() === user.userId;
       } else if (booking.bookingType === "TOUR_PACKAGE") {
-        return booking.tourId?.guide.toString() === user.userId;
+        return (booking.tourId as any)?.guide.toString() === user.userId;
       }
       return false;
     });
@@ -632,21 +638,22 @@ const getPaidBookings = async (req: Request, user: JwtPayload) => {
       if (booking.bookingType === "GUIDE_HIRE") {
         return booking.guideId?._id.toString() === user.userId;
       } else if (booking.bookingType === "TOUR_PACKAGE") {
-        return booking.tourId?.guide.toString() === user.userId;
+        return (booking.tourId as any)?.guide?.toString() === user.userId;
       }
       return false;
     });
   }
 
   if (user.role === "TOURIST") {
-    filteredBookings = bookings.filter(
-      (booking) => booking.touristId.toString() === user.userId
-    );
+    filteredBookings = await Booking.find({
+      touristId: user.userId,
+      paymentStatus: "PAID",
+    });
   }
 
   // Step 3: no paid booking found
   if (filteredBookings.length === 0) {
-    throw new AppError(httpStatus.NOT_FOUND, "No paid bookings found");
+    throw new AppError(404, "No paid bookings found");
   }
 
   return filteredBookings;
@@ -663,4 +670,5 @@ export const BookingServices = {
   getBookingsNeedPayment,
   getPaidBookings,
   getAllUnpaidBookingsOfGuide,
+  getAllBookingsOfLoggedInUser,
 };

@@ -83,24 +83,6 @@ const updateUser = async (req: Request, user: JwtPayload) => {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
-  // const isAdmin = user.role === Role.ADMIN;
-  // const isSelfUpdate = user._id?.toString() === existingUser._id.toString();
-
-  // if (!isSelfUpdate && !isAdmin) {
-  //   throw new AppError(
-  //     httpStatus.FORBIDDEN,
-  //     "You can only update your own profile"
-  //   );
-  // }
-
-  // Password → hash it
-  // if (payload.password) {
-  //   payload.password = await bcryptjs.hash(
-  //     payload.password,
-  //     Number(envVars.BCRYPT_SALT_ROUND)
-  //   );
-  // }
-
   // File upload → Cloudinary
   if (req.file) {
     const uploadResult = await fileUploader.uploadToCloudinary(req.file);

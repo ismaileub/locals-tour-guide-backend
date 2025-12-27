@@ -7,23 +7,25 @@ import { Tour } from "./tour.model";
 import { fileUploader } from "../../helpers/fileUploader";
 import mongoose from "mongoose";
 
-const createTour = async (req: Request, user: JwtPayload) => {
+const createTour = async (
+  payload: any, // Changed from req: Request
+  user: JwtPayload,
+  file?: Express.Multer.File
+) => {
   if (user.role !== "GUIDE") {
     throw new AppError(403, "Only guides can create tours");
   }
 
-  // Extract fields from req.body
-  const payload = { ...req.body };
-
-  // Upload image if exists
-  if (req.file) {
-    const uploadResult = await fileUploader.uploadToCloudinary(req.file);
-    payload.coverPhoto = uploadResult?.secure_url;
+  // Handle optional cover photo
+  if (file) {
+    const uploadResult = await fileUploader.uploadToCloudinary(file);
+    // Ensure we are assigning to the payload object we received
+    payload.coverPhoto = uploadResult?.secure_url || "";
   }
 
-  // Add guide automatically
+  // Assign the guide automatically
   const newTour = await Tour.create({
-    ...payload,
+    ...payload, // Now this contains title, price, etc. clearly
     guide: user.userId,
   });
 

@@ -7,10 +7,11 @@ const router = Router();
 
 // Tourist creates a booking
 router.post("/", checkAuth(Role.TOURIST), BookingControllers.createBooking);
+router.get("/", checkAuth(Role.ADMIN), BookingControllers.getAllBookings);
 router.get(
-  "/",
-  checkAuth(Role.ADMIN, Role.GUIDE, Role.TOURIST),
-  BookingControllers.getAllBookings
+  "/logged-user-booking",
+  checkAuth(Role.GUIDE, Role.TOURIST),
+  BookingControllers.getAllBookingsOfLoggedInUser
 );
 router.get(
   "/pending",
@@ -49,7 +50,7 @@ router.get(
 router.get(
   "/:id",
   checkAuth(Role.ADMIN, Role.GUIDE, Role.TOURIST),
-  BookingControllers.getBooking
+  BookingControllers.getBookingById
 );
 
 router.patch(

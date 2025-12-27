@@ -1,13 +1,24 @@
-import { Request, Response } from "express";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextFunction, Request, Response } from "express";
 import { JwtPayload } from "jsonwebtoken";
 import { catchAsync } from "../../utils/catchAsync";
 import { sendResponse } from "../../utils/sendResponse";
 import { TourServices } from "./tour.service";
 
-const createTour = catchAsync(async (req: Request, res: Response) => {
+const createTour = catchAsync(async (req, res, next) => {
+  // 1. Extract the stringified data
+  let tourData = req.body;
+
+  // If sent via FormData, the fields are inside 'data' string
+  if (req.body.data) {
+    tourData = JSON.parse(req.body.data);
+  }
+
   const user = req.user as JwtPayload;
 
-  const tour = await TourServices.createTour(req, user);
+  // 2. Pass explicitly parsed data to the service, NOT req
+  const tour = await TourServices.createTour(tourData, user, req.file);
 
   sendResponse(res, {
     success: true,

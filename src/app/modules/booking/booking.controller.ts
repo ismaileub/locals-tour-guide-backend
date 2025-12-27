@@ -26,17 +26,6 @@ const updateBooking = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const getBooking = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload;
-  const booking = await BookingServices.getBookingById(req, user);
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: "Booking fetched successfully",
-    data: booking,
-  });
-});
-
 // const getAllBookings = catchAsync(async (req: Request, res: Response) => {
 //   const user = req.user as JwtPayload;
 //   const page = Number(req.query.page) || 1;
@@ -53,6 +42,26 @@ const getBooking = catchAsync(async (req: Request, res: Response) => {
 // });
 
 //get all booking fo admin
+const getAllBookingsOfLoggedInUser = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 8;
+    const result = await BookingServices.getAllBookingsOfLoggedInUser(
+      user,
+      page,
+      limit
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Bookings retrieved successfully of current logged user",
+      data: result.data,
+      meta: result.meta,
+    });
+  }
+);
 const getAllBookings = catchAsync(async (req: Request, res: Response) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 10;
@@ -159,15 +168,29 @@ const getPaidBookings = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getBookingById = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as JwtPayload;
+
+  const result = await BookingServices.getBookingById(req, user);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: "Booking retrieved successfully",
+    data: result,
+  });
+});
+
 export const BookingControllers = {
   createBooking,
   updateBooking,
-  getBooking,
   getAllBookings,
   getPendingBookingsForGuide,
   getConfirmedAndCompleteBookingsForGuide,
   getSingleBookingByTouristIdAndTargetId,
   getBookingsNeedPayment,
   getPaidBookings,
+  getBookingById,
   getAllUnpaidBookingsOfGuide,
+  getAllBookingsOfLoggedInUser,
 };

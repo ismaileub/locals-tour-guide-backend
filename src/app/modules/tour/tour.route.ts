@@ -11,18 +11,8 @@ const router = Router();
 router.post(
   "/create",
   checkAuth(Role.GUIDE),
-  fileUploader.upload.single("file"),
-  (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (req.body.data) {
-        req.body = JSON.parse(req.body.data);
-      }
-      return TourControllers.createTour(req, res, next);
-    } catch (err) {
-      console.error("JSON parse error:", err);
-      next(err);
-    }
-  }
+  fileUploader.upload.single("file"), // handle optional file
+  TourControllers.createTour // controller handles JSON parsing and file
 );
 
 router.get("/", TourControllers.getAllTours);

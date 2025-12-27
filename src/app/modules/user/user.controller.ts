@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 import { NextFunction, Request, Response } from "express";
@@ -49,18 +50,46 @@ const createUser = catchAsync(
 //   }
 // );
 
-const updateUser = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as JwtPayload;
+// const updateUser = catchAsync(
+//   async (
+//     req: Request,
+//     res: Response<any, Record<string, any>>,
+//     next: NextFunction
+//   ) => {
+//     const user = req.user as JwtPayload;
 
-  const updatedUser = await UserServices.updateUser(req, user);
+//     const updatedUser = await UserServices.updateUser(req, user);
 
-  sendResponse(res, {
-    success: true,
-    statusCode: 200,
-    message: "User Updated Successfully",
-    data: updatedUser,
-  });
-});
+//     sendResponse(res, {
+//       success: true,
+//       statusCode: 200,
+//       message: "User Updated Successfully",
+//       data: updatedUser,
+//     });
+//   }
+// );
+const updateUser = catchAsync(
+  async (
+    req: Request,
+    res: Response<any, Record<string, any>>,
+    next: NextFunction
+  ) => {
+    // Parse frontend JSON if sent inside "data"
+    if (req.body.data) {
+      req.body = JSON.parse(req.body.data);
+    }
+
+    const user = req.user as JwtPayload;
+    const updatedUser = await UserServices.updateUser(req, user);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "User Updated Successfully",
+      data: updatedUser,
+    });
+  }
+);
 
 const getAllUsers = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {

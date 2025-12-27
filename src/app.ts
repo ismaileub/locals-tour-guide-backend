@@ -2,7 +2,6 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { Request, Response } from "express";
 import expressSession from "express-session";
-import passport from "passport";
 import { envVars } from "./app/config/env";
 import "./app/config/passport";
 import { globalErrorHandler } from "./app/middlewares/globalErrorHandler";
@@ -23,13 +22,15 @@ app.use(
     saveUninitialized: false,
   })
 );
-app.use(passport.initialize());
-app.use(passport.session());
+app.use(cors());
 app.use(cookieParser());
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:3000"],
+    origin: [
+      "http://localhost:3000",
+      "https://tour-guide-frontend-amber.vercel.app",
+    ],
     credentials: true,
   })
 );
