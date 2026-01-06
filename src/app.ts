@@ -12,6 +12,7 @@ import { TourRoutes } from "./app/modules/tour/tour.route";
 import { BookingRoutes } from "./app/modules/booking/booking.route";
 import { PaymentRoutes } from "./app/modules/booking/payment/payment.routes";
 import { ReviewRoutes } from "./app/modules/review/review.route";
+import { DashboardRoutes } from "./app/modules/dashboard/dashboard.route";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use("/api/tours", TourRoutes);
 app.use("/api/booking", BookingRoutes);
 app.use("/api/review", ReviewRoutes);
 app.use("/api/payment", PaymentRoutes);
+app.use("/api/dashboard", DashboardRoutes);
 
 app.get("/", (req: Request, res: Response) => {
   res.status(200).json({
